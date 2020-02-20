@@ -20,8 +20,9 @@ class H68K:
     def __init__(self, conf):
         self.fs_offset = 0x8000
         file_size = os.path.getsize(conf["file"])
+        file_size = 127398912
         self.fs_size = file_size - self.fs_offset
-        self.f = builtins.open(conf["file"], 'rb')
+        self.f = builtins.open(conf["file"], 'rb+')
         self.f.seek(self.fs_offset)
         x68k_bpb = bytearray(self.f.read(512))
         bytes_per_sector = struct.unpack_from(">H", x68k_bpb, 0x12)[0]
@@ -42,8 +43,6 @@ conf = {}
 def config(key, value):
     global conf
     conf[key] = value
-    print("ignored parameter %s=%s" % (key, value))
-
 
 def open(readonly):
     global conf
@@ -72,8 +71,19 @@ def pread(h68k, count, offset):
     return b
 
 
-def pwrite(h, buf, offset):
-    pass
+def pwrite(h68k, buf, offset):
+    b = bytearray()
+    for i in range(offset, offset+len(buf)):
+        if i < 0x24: # don't write bpb
+            pass
+        elif (i >= h68k.fat_start) and (i < (h68k.fat_start + h68k.fat_len)):
+            # byteswap fat
+            j = i ^ 1
+            h68k.f.seek(j + h68k.fs_offset)
+            h68k.f.write(bytearray([buf[i-offset]]))
+        else:
+            h68k.f.seek(i + h68k.fs_offset)
+            h68k.f.write(bytearray([buf[i-offset]]))
 
 
 def zero(h, count, offset, may_trim):
